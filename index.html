@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Outreach Tracker</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <h1>Outreach Tracker</h1>
+        <p>Track prospects, outreach, follow-ups, and replies on this computer. Nothing is uploaded.</p>
+      </div>
+      <div class="actions">
+        <button id="addBtn">Add prospect</button>
+        <!-- <button id="importBtn">Import JSON</button> -->
+        <input id="importFile" type="file" accept=".json,application/json" hidden />
+        <button class="primary" id="exportBtn">Export Excel</button>
+        <button class="danger" id="resetBtn">Reset data</button>
+      </div>
+    </header>
+
+    <section class="stats" id="stats"></section>
+
+    <div class="toolbar">
+      <input id="q" type="search" placeholder="Search handle, name, angle, email..." />
+      <select id="niche">
+        <option value="all">All niches</option>
+        <option value="Wealth">Wealth</option>
+        <option value="Health">Health</option>
+        <option value="Relationships">Relationships</option>
+      </select>
+      <select id="status">
+        <option value="all">All statuses</option>
+        <option value="not_contacted">Not contacted</option>
+        <option value="in_progress">In progress</option>
+        <option value="positive">Positive</option>
+        <option value="negative">Negative</option>
+      </select>
+      <select id="outreach">
+        <option value="all">All outreach</option>
+        <option value="sent">Sent</option>
+        <option value="unsent">Not sent</option>
+      </select>
+      <select id="confidence">
+        <option value="all">All confidence</option>
+        <option value="High">High</option>
+        <option value="Med">Med</option>
+        <option value="Low">Low</option>
+      </select>
+      <span class="hint">Click a row to log messages and change status</span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Creator</th>
+            <th>Niche</th>
+            <th class="hide-sm">Size</th>
+            <th>Conf.</th>
+            <th>Outreach</th>
+            <th>Status</th>
+            <th class="hide-sm">Updated</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="drawer-backdrop" id="backdrop"></div>
+  <aside class="drawer" id="drawer"></aside>
+
+  <div class="modal-backdrop" id="formBackdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="formTitle">
+      <div class="modal-head">
+        <h2 id="formTitle">Add prospect</h2>
+        <button type="button" class="ghost" id="closeFormBtn">Close</button>
+      </div>
+      <form id="prospectForm" class="modal-body" novalidate>
+        <input type="hidden" name="id" />
+
+        <p class="form-hint">Fields marked <span class="req">*</span> are required. Everything else is optional.</p>
+
+        <div class="form-grid">
+          <div class="field-wrap">
+            <label for="fHandle">Handle <span class="req">*</span></label>
+            <input class="field" id="fHandle" name="handle" required placeholder="username or pasted Instagram URL" />
+            <div class="url-preview" id="urlPreview">Profile URL will appear from the handle</div>
+          </div>
+          <div class="field-wrap">
+            <label for="fName">Name <span class="req">*</span></label>
+            <input class="field" id="fName" name="name" required placeholder="Full or display name" />
+          </div>
+          <div class="field-wrap">
+            <label for="fNiche">Niche <span class="req">*</span></label>
+            <input class="field" id="fNiche" name="niche" required list="nicheList" placeholder="e.g. Wealth, Health, Relationships" />
+            <datalist id="nicheList">
+              <option value="Wealth"></option>
+              <option value="Health"></option>
+              <option value="Relationships"></option>
+            </datalist>
+          </div>
+          <div class="field-wrap">
+            <label for="fEmail">Email <span class="opt">optional</span></label>
+            <input class="field" id="fEmail" name="email" type="email" placeholder="name@email.com" />
+          </div>
+          <div class="field-wrap">
+            <label for="fSpecialty">Specialty <span class="opt">optional</span></label>
+            <input class="field" id="fSpecialty" name="specialty" placeholder="What they are known for" />
+          </div>
+          <div class="field-wrap">
+            <label for="fFollowers">Followers <span class="opt">optional</span></label>
+            <input class="field" id="fFollowers" name="followers" placeholder="e.g. 36K" />
+          </div>
+          <div class="field-wrap">
+            <label for="fSize">Audience size <span class="opt">optional</span></label>
+            <select class="field" id="fSize" name="size">
+              <option value="">—</option>
+              <option value="Nano">Nano</option>
+              <option value="Micro">Micro</option>
+              <option value="Mid">Mid</option>
+              <option value="Macro">Macro</option>
+            </select>
+          </div>
+          <div class="field-wrap">
+            <label for="fConfidence">Confidence <span class="opt">optional</span></label>
+            <select class="field" id="fConfidence" name="confidence">
+              <option value="">—</option>
+              <option value="High">High</option>
+              <option value="Med">Med</option>
+              <option value="Low">Low</option>
+            </select>
+          </div>
+          <div class="field-wrap">
+            <label for="fStatus">Status <span class="opt">optional</span></label>
+            <select class="field" id="fStatus" name="status">
+              <option value="not_contacted">Not contacted</option>
+              <option value="in_progress">In progress</option>
+              <option value="positive">Positive</option>
+              <option value="negative">Negative</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field-wrap">
+          <label class="check">
+            <input type="checkbox" id="fOutreachSent" name="outreachSent" />
+            Outreach already sent
+          </label>
+        </div>
+
+        <div class="field-wrap">
+          <label for="fWhyFits">Why they fit <span class="opt">optional</span></label>
+          <textarea id="fWhyFits" name="whyFits" placeholder="Why this person is a good prospect"></textarea>
+        </div>
+        <div class="field-wrap">
+          <label for="fNoPaid">Current offers / monetization notes <span class="opt">optional</span></label>
+          <textarea id="fNoPaid" name="noPaidOffer" placeholder="Courses, coaching, affiliates, none found, etc."></textarea>
+        </div>
+        <div class="field-wrap">
+          <label for="fAngle">Offer angle <span class="opt">optional</span></label>
+          <textarea id="fAngle" name="mosAngle" placeholder="How you would work with them or what you would pitch"></textarea>
+        </div>
+        <div class="field-wrap">
+          <label for="fNotes">Notes <span class="opt">optional</span></label>
+          <textarea id="fNotes" name="notes" placeholder="Anything else"></textarea>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="ghost" id="cancelFormBtn">Cancel</button>
+          <button type="submit" class="primary" id="saveFormBtn">Save prospect</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="xlsx.full.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
