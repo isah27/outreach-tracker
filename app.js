@@ -776,12 +776,13 @@ function bind() {
   });
   document.getElementById("exportBtn").onclick = exportExcel;
   document.getElementById("resetBtn").onclick = resetData;
-  // document.getElementById("importBtn").onclick = () => document.getElementById("importFile").click();
-  // document.getElementById("importFile").addEventListener("change", (e) => {
-  //   const file = e.target.files && e.target.files[0];
-  //   if (file) importJsonFile(file);
-  //   e.target.value = "";
-  // });
+  document.getElementById("importBtn").onclick = () =>
+    document.getElementById("importFile").click();
+  document.getElementById("importFile").addEventListener("change", (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) importJsonFile(file);
+    e.target.value = "";
+  });
   document.getElementById("addBtn").onclick = () => openProspectForm(null);
   document.getElementById("backdrop").onclick = closeDrawer;
   document.getElementById("closeFormBtn").onclick = closeProspectForm;
