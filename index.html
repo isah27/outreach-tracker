@@ -15,11 +15,13 @@
         <p>Track prospects, outreach, follow-ups, and replies on this computer. Nothing is uploaded.</p>
       </div>
       <div class="actions">
-        <button id="addBtn">Add prospect</button>
-        <button id="importBtn">Import JSON</button>
-        <input id="importFile" type="file" accept=".json,application/json" hidden />
-        <button class="primary" id="exportBtn">Export Excel</button>
-        <button class="danger" id="resetBtn">Reset data</button>
+        <button type="button" class="action" id="addBtn">Add prospect</button>
+        <label class="action file-btn">
+          Import Excel
+          <input id="importFile" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" />
+        </label>
+        <button type="button" class="action primary" id="exportBtn">Export Excel</button>
+        <button type="button" class="action danger" id="resetBtn">Reset data</button>
       </div>
     </header>
 
@@ -177,6 +179,23 @@
           <button type="submit" class="primary" id="saveFormBtn">Save prospect</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="importBackdrop" hidden>
+    <div class="modal import-modal" role="dialog" aria-modal="true" aria-labelledby="importTitle">
+      <div class="modal-head">
+        <h2 id="importTitle">Import prospects</h2>
+        <button type="button" class="ghost" id="importCancelBtn">Close</button>
+      </div>
+      <div class="modal-body">
+        <p class="form-hint" id="importSummary"></p>
+        <div class="modal-actions">
+          <button type="button" class="ghost" id="importDismissBtn">Cancel</button>
+          <button type="button" id="importMergeBtn">Merge</button>
+          <button type="button" class="primary" id="importReplaceBtn">Replace list</button>
+        </div>
+      </div>
     </div>
   </div>
 

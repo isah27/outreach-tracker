@@ -7,8 +7,28 @@ const STATUS_LABEL = {
   negative: "Negative",
 };
 
+const STATUS_FROM_LABEL = {
+  "not contacted": "not_contacted",
+  not_contacted: "not_contacted",
+  "in progress": "in_progress",
+  in_progress: "in_progress",
+  positive: "positive",
+  negative: "negative",
+};
+
 function nowISO() {
   return new Date().toISOString();
+}
+
+function uid() {
+  try {
+    if (globalThis.crypto && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+  } catch {
+    /* file:// pages are not a secure context */
+  }
+  return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function fmt(ts) {
@@ -46,6 +66,7 @@ function saveState() {
 
 let state = loadState();
 let selectedId = null;
+let pendingImport = null;
 let filters = {
   q: "",
   niche: "all",
@@ -54,11 +75,13 @@ let filters = {
   confidence: "all",
 };
 
-function toast(msg) {
+let toastTimer = null;
+function toast(msg, duration = 2400) {
   const el = document.getElementById("toast");
   el.textContent = msg;
   el.classList.add("show");
-  setTimeout(() => el.classList.remove("show"), 2200);
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), duration);
 }
 
 function getSelected() {
@@ -81,7 +104,7 @@ function addActivity(id, type, content) {
     return;
   }
   const item = {
-    id: crypto.randomUUID(),
+    id: uid(),
     type,
     content: content.trim(),
     timestamp: nowISO(),
@@ -101,7 +124,7 @@ function setStatus(id, status) {
   const p = state.prospects.find((x) => x.id === id);
   if (!p || p.status === status) return;
   const item = {
-    id: crypto.randomUUID(),
+    id: uid(),
     type: "status",
     content: `Status changed: ${STATUS_LABEL[p.status]} → ${STATUS_LABEL[status]}`,
     timestamp: nowISO(),
@@ -171,6 +194,22 @@ function typeLabel(t) {
   );
 }
 
+const TYPE_FROM_LABEL = {
+  outreach: "outreach",
+  "follow-up": "followup",
+  followup: "followup",
+  "their response": "response",
+  response: "response",
+  note: "note",
+  status: "status",
+};
+
+function normalizeType(value) {
+  const raw = String(value || "").trim();
+  const key = raw.toLowerCase();
+  return TYPE_FROM_LABEL[key] || raw || "note";
+}
+
 function typeBadgeClass(t) {
   if (t === "response") return "positive";
   if (t === "outreach") return "sent";
@@ -195,7 +234,7 @@ function renderTable() {
   const rows = filtered();
   const body = document.getElementById("tbody");
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="8"><div class="empty">${state.prospects.length ? "No prospects match these filters." : "No prospects yet. Add one or import a JSON file."}</div></td></tr>`;
+    body.innerHTML = `<tr><td colspan="8"><div class="empty">${state.prospects.length ? "No prospects match these filters." : "No prospects yet. Add one or import an Excel file."}</div></td></tr>`;
     return;
   }
   body.innerHTML = rows
@@ -404,6 +443,9 @@ function exportExcel() {
     Created: fmt(p.createdAt),
     Updated: fmt(p.updatedAt),
     "Status updated": fmt(p.statusUpdatedAt),
+    "Created ISO": p.createdAt || "",
+    "Updated ISO": p.updatedAt || "",
+    "Status updated ISO": p.statusUpdatedAt || "",
     "Latest outreach": latestOf(p, "outreach"),
     "Latest follow-up": latestOf(p, "followup"),
     "Latest response": latestOf(p, "response"),
@@ -420,6 +462,7 @@ function exportExcel() {
         Content: a.content,
         Timestamp: fmt(a.timestamp),
         "ISO time": a.timestamp,
+        "Activity id": a.id,
       });
     });
   });
@@ -436,9 +479,13 @@ function exportExcel() {
     XLSX.utils.json_to_sheet(sheet2),
     "Activity",
   );
-  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  const stamp = fileStamp();
   XLSX.writeFile(wb, `prospects-${stamp}.xlsx`);
   toast("Excel downloaded.");
+}
+
+function fileStamp() {
+  return new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
 }
 
 function latestOf(p, type) {
@@ -463,77 +510,257 @@ function resetData() {
   toast("All local data cleared.");
 }
 
-function normalizeImported(raw) {
-  const list = Array.isArray(raw) ? raw : (raw && raw.prospects) || [];
-  const ts = nowISO();
-  return list
-    .map((item, i) => {
-      const handle = parseHandle(item.handle || item.Handle || "");
-      const id = Number(item.id) || i + 1;
-      const outreachSent = !!(item.outreachSent ?? item.outreach_sent);
-      const status =
-        item.status || (outreachSent ? "in_progress" : "not_contacted");
-      return {
-        id,
-        handle,
-        name: item.name || "",
-        niche: item.niche || "",
-        specialty: item.specialty || "",
-        followers: item.followers || "",
-        size: item.size || "",
-        url: item.url || profileUrlFromHandle(handle),
-        whyFits: item.whyFits || item.why_fits || "",
-        noPaidOffer: item.noPaidOffer || "",
-        mosAngle: item.mosAngle || item.angle || "",
-        confidence: item.confidence || "",
-        email: item.email || "",
-        notes: item.notes || "",
-        outreachSent,
-        status,
-        createdAt: item.createdAt || ts,
-        updatedAt: item.updatedAt || ts,
-        statusUpdatedAt: item.statusUpdatedAt || ts,
-        activity: Array.isArray(item.activity) ? item.activity : [],
-      };
-    })
-    .filter((p) => p.handle || p.name);
+function pick(item, keys) {
+  for (const key of keys) {
+    const value = item[key];
+    if (value == null) continue;
+    const text = String(value).trim();
+    if (text) return text;
+  }
+  return "";
 }
 
-function importJsonFile(file) {
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const parsed = JSON.parse(reader.result);
-      const incoming = normalizeImported(parsed);
-      if (!incoming.length) {
-        toast("No prospects found in that file.");
-        return;
-      }
-      const replace =
-        !state.prospects.length ||
-        confirm(
-          `Import ${incoming.length} prospects? OK = replace current list. Cancel = merge.`,
-        );
-      if (replace) {
-        state.prospects = incoming;
-      } else {
-        const existing = new Set(
-          state.prospects.map((p) => p.handle.toLowerCase()),
-        );
-        let nextId = Math.max(0, ...state.prospects.map((p) => p.id));
-        incoming.forEach((p) => {
-          if (existing.has(p.handle.toLowerCase())) return;
-          nextId += 1;
-          state.prospects.push({ ...p, id: nextId });
-        });
-      }
-      saveState();
-      toast(`Imported ${incoming.length} prospects.`);
-    } catch {
-      toast("Could not read that JSON file.");
+function toISO(value) {
+  if (value == null || value === "") return "";
+  if (value instanceof Date && !isNaN(value.getTime())) return value.toISOString();
+  if (typeof value === "number" && value > 20000 && value < 80000) {
+    const utc = new Date(Math.round((value - 25569) * 86400 * 1000));
+    if (!isNaN(utc.getTime())) return utc.toISOString();
+  }
+  const parsed = new Date(value);
+  if (!isNaN(parsed.getTime())) return parsed.toISOString();
+  return "";
+}
+
+function asBool(value) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  const text = String(value ?? "").trim().toLowerCase();
+  return text === "yes" || text === "true" || text === "1" || text === "sent";
+}
+
+function normalizeStatus(value, outreachSent) {
+  const key = String(value || "").trim().toLowerCase();
+  if (STATUS_FROM_LABEL[key]) return STATUS_FROM_LABEL[key];
+  return outreachSent ? "in_progress" : "not_contacted";
+}
+
+function importedList(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (!raw || typeof raw !== "object") return [];
+  if (Array.isArray(raw.prospects)) return raw.prospects;
+  if (Array.isArray(raw.data)) return raw.data;
+  if (Array.isArray(raw.items)) return raw.items;
+  if (raw.handle || raw.Handle || raw.name || raw.Name || raw.username) return [raw];
+  return [];
+}
+
+function normalizeActivity(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      id: item.id || item["Activity id"] ? String(item.id || item["Activity id"]) : uid(),
+      type: normalizeType(item.type || item.Type),
+      content: String(item.content || item.Content || ""),
+      timestamp: toISO(item.timestamp || item["ISO time"] || item.Timestamp) || nowISO(),
+    }));
+}
+
+function normalizeImported(raw) {
+  const list = importedList(raw);
+  const ts = nowISO();
+  const used = new Set();
+  let nextId = 0;
+  const prospects = [];
+  list.forEach((item, i) => {
+    if (!item || typeof item !== "object") return;
+    const directHandle = pick(item, ["handle", "Handle", "username"]);
+    const link = pick(item, ["Instagram", "instagram", "url", "profile"]);
+    const handle = parseHandle(
+      directHandle ||
+        (/instagram\.com/i.test(link) || /^@?[A-Za-z0-9._]+$/.test(link) ? link : ""),
+    );
+    const name = pick(item, ["name", "Name"]);
+    if (!handle && !name) return;
+    const outreachSent = asBool(
+      item.outreachSent ?? item.outreach_sent ?? item["Outreach sent"] ?? item.outreach,
+    );
+    const explicitUrl = pick(item, ["url", "Instagram", "instagram", "profile"]);
+    const url = /^https?:\/\//i.test(explicitUrl)
+      ? explicitUrl
+      : profileUrlFromHandle(handle);
+    let id = Number(item.id ?? item["#"]);
+    if (!Number.isFinite(id) || id <= 0 || used.has(id)) {
+      id = Math.max(nextId, i) + 1;
+      while (used.has(id)) id += 1;
     }
-  };
-  reader.readAsText(file);
+    used.add(id);
+    if (id > nextId) nextId = id;
+    prospects.push({
+      id,
+      handle,
+      name,
+      niche: pick(item, ["niche", "Niche"]),
+      specialty: pick(item, ["specialty", "Specialty"]),
+      followers: pick(item, ["followers", "Followers"]),
+      size: pick(item, ["size", "Size"]),
+      url,
+      whyFits: pick(item, ["whyFits", "why_fits", "Why they fit"]),
+      noPaidOffer: pick(item, ["noPaidOffer", "Offers / monetization", "monetization"]),
+      mosAngle: pick(item, ["mosAngle", "angle", "Offer angle"]),
+      confidence: pick(item, ["confidence", "Confidence"]),
+      email: pick(item, ["email", "Email"]),
+      notes: pick(item, ["notes", "Notes"]),
+      outreachSent,
+      status: normalizeStatus(pick(item, ["status", "Status"]), outreachSent),
+      createdAt: toISO(item.createdAt || item["Created ISO"] || item.Created) || ts,
+      updatedAt: toISO(item.updatedAt || item["Updated ISO"] || item.Updated) || ts,
+      statusUpdatedAt:
+        toISO(item.statusUpdatedAt || item["Status updated ISO"] || item["Status updated"]) || ts,
+      activity: normalizeActivity(item.activity),
+    });
+  });
+  return prospects;
+}
+
+function prospectKey(p) {
+  if (p.handle) return `h:${p.handle.toLowerCase()}`;
+  return `n:${String(p.name || "").toLowerCase()}`;
+}
+
+function closeImportDialog() {
+  pendingImport = null;
+  const backdrop = document.getElementById("importBackdrop");
+  if (backdrop) backdrop.hidden = true;
+}
+
+function applyImported(incoming, mode) {
+  if (mode === "replace") {
+    selectedId = null;
+    document.getElementById("backdrop").classList.remove("show");
+    document.getElementById("drawer").classList.remove("show");
+    state.prospects = incoming;
+    saveState();
+    toast(`Imported ${incoming.length} prospect${incoming.length === 1 ? "" : "s"}.`);
+    return;
+  }
+  const existing = new Set(state.prospects.map(prospectKey));
+  let nextId = state.prospects.reduce((max, p) => Math.max(max, Number(p.id) || 0), 0);
+  let added = 0;
+  incoming.forEach((p) => {
+    const key = prospectKey(p);
+    if (existing.has(key)) return;
+    nextId += 1;
+    state.prospects.push({ ...p, id: nextId });
+    existing.add(key);
+    added += 1;
+  });
+  saveState();
+  toast(
+    added
+      ? `Added ${added} prospect${added === 1 ? "" : "s"}.`
+      : "Those prospects are already in the list.",
+  );
+}
+
+function readFileBuffer(file) {
+  if (file && typeof file.arrayBuffer === "function") return file.arrayBuffer();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error("read failed"));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function sheetByName(wb, name) {
+  const found = (wb.SheetNames || []).find((n) => String(n).toLowerCase() === name.toLowerCase());
+  return found ? wb.Sheets[found] : null;
+}
+
+function sheetRows(sheet) {
+  if (!sheet) return [];
+  return XLSX.utils.sheet_to_json(sheet, { defval: "" });
+}
+
+function uniqueActivity(lists) {
+  const seen = new Set();
+  const out = [];
+  lists.flat().forEach((item) => {
+    if (!item) return;
+    const key = [item.id, item.type, item.timestamp, item.content].join("\u0000");
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(item);
+  });
+  return out;
+}
+
+function workbookToProspects(wb) {
+  const prospectSheet =
+    sheetByName(wb, "Prospects") || (wb.SheetNames[0] && wb.Sheets[wb.SheetNames[0]]);
+  const rows = sheetRows(prospectSheet);
+  const grouped = new Map();
+  sheetRows(sheetByName(wb, "Activity")).forEach((row) => {
+    const idKey = String(row["#"] ?? "").replace(/^#/, "").trim();
+    const handleKey = parseHandle(row.Handle || row.handle || "").toLowerCase();
+    const entry = {
+      id: row["Activity id"] || "",
+      type: row.Type || row.type || "note",
+      content: row.Content || row.content || "",
+      timestamp: row["ISO time"] || row.Timestamp || row.timestamp || "",
+    };
+    [idKey ? `id:${idKey}` : "", handleKey ? `h:${handleKey}` : ""]
+      .filter(Boolean)
+      .forEach((key) => {
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key).push(entry);
+      });
+  });
+  rows.forEach((row) => {
+    const idKey = String(row["#"] ?? row.id ?? "").replace(/^#/, "").trim();
+    const handleKey = parseHandle(row.Handle || row.handle || "").toLowerCase();
+    row.activity = uniqueActivity([
+      idKey ? grouped.get(`id:${idKey}`) : [],
+      handleKey ? grouped.get(`h:${handleKey}`) : [],
+    ]);
+    row.createdAt = row["Created ISO"] || row.createdAt || row.Created || "";
+    row.updatedAt = row["Updated ISO"] || row.updatedAt || row.Updated || "";
+    row.statusUpdatedAt =
+      row["Status updated ISO"] || row.statusUpdatedAt || row["Status updated"] || "";
+  });
+  return normalizeImported(rows);
+}
+
+function importExcelBuffer(buffer) {
+  let wb;
+  try {
+    wb = XLSX.read(buffer, { type: "array", cellDates: true });
+  } catch {
+    toast("That file is not an Excel workbook.");
+    return;
+  }
+  let incoming;
+  try {
+    incoming = workbookToProspects(wb);
+  } catch {
+    toast("Could not read the prospects in that file.");
+    return;
+  }
+  if (!incoming.length) {
+    toast("No prospects found in that workbook.");
+    return;
+  }
+  if (!state.prospects.length) {
+    applyImported(incoming, "replace");
+    return;
+  }
+  pendingImport = incoming;
+  const count = incoming.length;
+  document.getElementById("importSummary").textContent =
+    `This workbook has ${count} prospect${count === 1 ? "" : "s"}. You already have ${state.prospects.length}. Replace the current list, or merge and skip people who are already here.`;
+  document.getElementById("importBackdrop").hidden = false;
 }
 
 function parseHandle(raw) {
@@ -668,7 +895,7 @@ function submitProspectForm(e) {
     const activity = [];
     if (prev && prev.status !== data.status) {
       activity.push({
-        id: crypto.randomUUID(),
+        id: uid(),
         type: "status",
         content: `Status changed: ${STATUS_LABEL[prev.status]} → ${STATUS_LABEL[data.status]}`,
         timestamp: ts,
@@ -676,7 +903,7 @@ function submitProspectForm(e) {
     }
     if (prev && prev.outreachSent !== data.outreachSent) {
       activity.push({
-        id: crypto.randomUUID(),
+        id: uid(),
         type: "status",
         content: data.outreachSent
           ? "Marked outreach as sent."
@@ -685,7 +912,7 @@ function submitProspectForm(e) {
       });
     }
     activity.push({
-      id: crypto.randomUUID(),
+      id: uid(),
       type: "note",
       content: "Prospect details updated.",
       timestamp: ts,
@@ -717,7 +944,7 @@ function submitProspectForm(e) {
     statusUpdatedAt: ts,
     activity: [
       {
-        id: crypto.randomUUID(),
+        id: uid(),
         type: "status",
         content: "Prospect added.",
         timestamp: ts,
@@ -776,12 +1003,35 @@ function bind() {
   });
   document.getElementById("exportBtn").onclick = exportExcel;
   document.getElementById("resetBtn").onclick = resetData;
-  document.getElementById("importBtn").onclick = () =>
-    document.getElementById("importFile").click();
-  document.getElementById("importFile").addEventListener("change", (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (file) importJsonFile(file);
-    e.target.value = "";
+  document.getElementById("importFile").addEventListener("change", async (e) => {
+    const input = e.target;
+    const file = input.files && input.files[0];
+    if (!file) return;
+    let buffer;
+    try {
+      buffer = await readFileBuffer(file);
+    } catch {
+      input.value = "";
+      toast("Could not read that file.");
+      return;
+    }
+    input.value = "";
+    importExcelBuffer(buffer);
+  });
+  document.getElementById("importReplaceBtn").onclick = () => {
+    const incoming = pendingImport;
+    closeImportDialog();
+    if (incoming) applyImported(incoming, "replace");
+  };
+  document.getElementById("importMergeBtn").onclick = () => {
+    const incoming = pendingImport;
+    closeImportDialog();
+    if (incoming) applyImported(incoming, "merge");
+  };
+  document.getElementById("importCancelBtn").onclick = closeImportDialog;
+  document.getElementById("importDismissBtn").onclick = closeImportDialog;
+  document.getElementById("importBackdrop").addEventListener("click", (e) => {
+    if (e.target.id === "importBackdrop") closeImportDialog();
   });
   document.getElementById("addBtn").onclick = () => openProspectForm(null);
   document.getElementById("backdrop").onclick = closeDrawer;
@@ -802,9 +1052,12 @@ function bind() {
     updateUrlPreview();
   });
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      if (!document.getElementById("formBackdrop").hidden) closeProspectForm();
+    if (e.key !== "Escape") return;
+    if (!document.getElementById("importBackdrop").hidden) {
+      closeImportDialog();
+      return;
     }
+    if (!document.getElementById("formBackdrop").hidden) closeProspectForm();
   });
 }
 

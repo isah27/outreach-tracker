@@ -8,7 +8,7 @@ The app starts empty. It does not come with anyone else’s prospect list.
 
 1. Keep this whole `prospect-tracker` folder together.
 2. Open `index.html` in Chrome, Edge, or Firefox (double-click it).
-3. Add prospects with the form, or use **Import JSON** if you have a backup file.
+3. Add prospects with the form, or use **Import Excel** if you have a backup file.
 
 ## What you can do
 
@@ -18,8 +18,8 @@ The app starts empty. It does not come with anyone else’s prospect list.
 - Log outreach, follow-ups, and replies.
 - Change status: Not contacted / In progress / Positive / Negative.
 - Every save and status change gets a timestamp in the activity log.
-- **Import JSON** loads a list from a `.json` file.
-- **Export Excel** downloads two sheets: `Prospects` and `Activity`.
+- **Export Excel** downloads two sheets, `Prospects` and `Activity`.
+- **Import Excel** loads that same workbook back. If this browser already has prospects, choose replace or merge.
 - **Reset data** clears this browser’s list.
 
 ## Notes
