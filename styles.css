@@ -260,6 +260,8 @@ tbody tr.active { background: rgba(124, 156, 255, 0.10); }
 .drawer {
   position: fixed; top: 0; right: 0; height: 100%;
   width: min(560px, 100%);
+  max-width: 100%;
+  min-width: 0;
   background: #12161d;
   border-left: 1px solid var(--line);
   z-index: 30;
@@ -271,9 +273,31 @@ tbody tr.active { background: rgba(124, 156, 255, 0.10); }
 .drawer-head {
   padding: 18px 18px 12px;
   border-bottom: 1px solid var(--line);
+  min-width: 0;
 }
-.drawer-head h2 { margin: 0; font-size: 18px; }
-.drawer-head .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+.drawer-head-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.drawer-head-row > div:first-child {
+  min-width: 0;
+  flex: 1 1 140px;
+}
+.drawer-head h2 { margin: 0; font-size: 18px; overflow-wrap: anywhere; }
+.drawer-head .sub { color: var(--muted); font-size: 13px; margin-top: 4px; overflow-wrap: anywhere; }
+.drawer-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+button.danger:hover {
+  background: rgba(240, 113, 120, 0.08);
+  border-color: #7a3a44;
+}
 .drawer-body { padding: 16px 18px 30px; overflow: auto; flex: 1; }
 .meta-grid {
   display: grid;

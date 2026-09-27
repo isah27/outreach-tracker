@@ -18,7 +18,7 @@ A list saved by opening the file on disk is separate from a list saved on a host
 - **Add prospect** opens the form. Handle, name, and niche are required. Niche suggestions are Wealth, Health, and Relationships, and you can type any niche.
 - Paste a username or an Instagram profile URL. The app stores the handle and builds the profile link.
 - Optional fields: email, specialty, followers, audience size, confidence, status, whether outreach was already sent, why they fit, offers or monetization, offer angle, and notes.
-- Click a row to open the side panel. From there you can edit the prospect, change status, and log outreach, follow-ups, replies, and notes.
+- Click a row to open the side panel. From there you can edit or delete the prospect, change status, and log outreach, follow-ups, replies, and notes.
 - Saving an outreach message marks that prospect as sent. If they were Not contacted, the status moves to In progress.
 - Each save and status change is timestamped in the activity log. You can delete a log entry.
 

@@ -144,6 +144,24 @@ function deleteActivity(pid, aid) {
   saveState();
 }
 
+function deleteProspect(id) {
+  const p = state.prospects.find((x) => x.id === id);
+  if (!p) return;
+  const label = p.handle ? `@${p.handle}` : p.name || "this prospect";
+  if (
+    !confirm(
+      `Delete ${label}? Their outreach, follow-ups, and replies on this browser will be removed. This cannot be undone.`,
+    )
+  ) {
+    return;
+  }
+  state.prospects = state.prospects.filter((x) => x.id !== id);
+  if (selectedId === id) selectedId = null;
+  saveState();
+  closeDrawer();
+  toast(`${label} deleted.`);
+}
+
 function filtered() {
   const q = filters.q.trim().toLowerCase();
   const items = state.prospects.filter((p) => {
@@ -285,14 +303,15 @@ function renderDrawer() {
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   root.innerHTML = `
     <div class="drawer-head">
-      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
+      <div class="drawer-head-row">
         <div>
           <h2>#${p.id} · @${p.handle}</h2>
           <div class="sub">${p.name} · <a href="${p.url}" target="_blank" rel="noopener" style="color:var(--accent)">${p.url.replace("https://www.instagram.com/", "ig/")}</a></div>
         </div>
-        <div style="display:flex;gap:8px">
-          <button class="ghost" id="editProspectBtn">Edit</button>
-          <button class="ghost" id="closeDrawer">Close</button>
+        <div class="drawer-actions">
+          <button type="button" class="ghost" id="editProspectBtn">Edit</button>
+          <button type="button" class="ghost danger" id="deleteProspectBtn">Delete</button>
+          <button type="button" class="ghost" id="closeDrawer">Close</button>
         </div>
       </div>
     </div>
@@ -374,6 +393,7 @@ function renderDrawer() {
   `;
   root.querySelector("#closeDrawer").onclick = closeDrawer;
   root.querySelector("#editProspectBtn").onclick = () => openProspectForm(p.id);
+  root.querySelector("#deleteProspectBtn").onclick = () => deleteProspect(p.id);
   const sel = root.querySelector("#statusSelect");
   sel.value = p.status;
   sel.onchange = () => setStatus(p.id, sel.value);
