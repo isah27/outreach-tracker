@@ -44,7 +44,52 @@ function fmt(ts) {
 }
 
 function emptyState() {
-  return { prospects: [] };
+  return { prospects: [], batchSeq: 0 };
+}
+
+function batchLabel(n) {
+  const num = Number(n);
+  if (!Number.isFinite(num) || num < 1) return "—";
+  return `Batch ${Math.floor(num)}`;
+}
+
+function parseBatchNumber(value) {
+  const match = String(value ?? "").match(/\d+/);
+  const n = match ? Number(match[0]) : 0;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
+function ensureBatches(data) {
+  let changed = false;
+  const seqRaw = Number(data.batchSeq);
+  if (!Number.isFinite(seqRaw) || seqRaw < 0) {
+    data.batchSeq = 0;
+    changed = true;
+  } else {
+    const seq = Math.floor(seqRaw);
+    if (data.batchSeq !== seq) changed = true;
+    data.batchSeq = seq;
+  }
+  let max = 0;
+  data.prospects.forEach((p) => {
+    const n = Number(p.batch);
+    if (Number.isFinite(n) && n >= 1) {
+      const batch = Math.floor(n);
+      if (p.batch !== batch) changed = true;
+      p.batch = batch;
+      if (batch > max) max = batch;
+    } else {
+      p.batch = 1;
+      changed = true;
+      if (max < 1) max = 1;
+    }
+  });
+  const seq = Math.max(data.batchSeq, max);
+  if (data.batchSeq !== seq) {
+    data.batchSeq = seq;
+    changed = true;
+  }
+  return changed;
 }
 
 function loadState() {
@@ -53,10 +98,32 @@ function loadState() {
     if (!raw) return emptyState();
     const parsed = JSON.parse(raw);
     if (!parsed || !Array.isArray(parsed.prospects)) return emptyState();
+    if (ensureBatches(parsed)) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+      } catch {
+        /* keep the normalized list in memory */
+      }
+    }
     return parsed;
   } catch {
     return emptyState();
   }
+}
+
+function lastBatchNumber() {
+  const n = Number(state.batchSeq) || 0;
+  return n > 0 ? n : 0;
+}
+
+function nextBatchNumber(mode) {
+  const last = lastBatchNumber();
+  if (mode === "last" && last >= 1) return last;
+  return last + 1;
+}
+
+function rememberBatch(number) {
+  if (number > lastBatchNumber()) state.batchSeq = number;
 }
 
 function saveState() {
@@ -72,7 +139,7 @@ let filters = {
   niche: "all",
   status: "all",
   outreach: "all",
-  confidence: "all",
+  batch: "all",
 };
 
 let toastTimer = null;
@@ -169,7 +236,7 @@ function filtered() {
     if (filters.status !== "all" && p.status !== filters.status) return false;
     if (filters.outreach === "sent" && !p.outreachSent) return false;
     if (filters.outreach === "unsent" && p.outreachSent) return false;
-    if (filters.confidence !== "all" && p.confidence !== filters.confidence)
+    if (filters.batch !== "all" && String(p.batch) !== String(filters.batch))
       return false;
     if (!q) return true;
     const blob = [
@@ -179,6 +246,7 @@ function filtered() {
       p.mosAngle,
       p.email,
       p.notes,
+      batchLabel(p.batch),
       String(p.id),
     ]
       .join(" ")
@@ -266,7 +334,7 @@ function renderTable() {
       </td>
       <td><span class="badge ${p.niche}">${p.niche}</span></td>
       <td class="hide-sm">${p.followers} · ${p.size}</td>
-      <td><span class="badge ${p.confidence}">${p.confidence}</span></td>
+      <td>${batchLabel(p.batch)}</td>
       <td><span class="badge ${p.outreachSent ? "sent" : "unsent"}">${p.outreachSent ? "Sent" : "Not sent"}</span></td>
       <td><span class="badge ${p.status}">${STATUS_LABEL[p.status]}</span></td>
       <td class="hide-sm" style="color:var(--faint);font-size:12px">${fmt(p.updatedAt)}</td>
@@ -317,6 +385,7 @@ function renderDrawer() {
     </div>
     <div class="drawer-body">
       <div class="meta-grid">
+        <div class="meta"><div class="k">Batch</div><div class="v">${batchLabel(p.batch)}</div></div>
         <div class="meta"><div class="k">Niche</div><div class="v">${p.niche}</div></div>
         <div class="meta"><div class="k">Followers</div><div class="v">${p.followers} · ${p.size}</div></div>
         <div class="meta"><div class="k">Confidence</div><div class="v">${p.confidence}</div></div>
@@ -447,6 +516,7 @@ function exportExcel() {
     "#": p.id,
     Handle: "@" + p.handle,
     Name: p.name,
+    Batch: batchLabel(p.batch),
     Niche: p.niche,
     Specialty: p.specialty,
     Followers: p.followers,
@@ -632,6 +702,7 @@ function normalizeImported(raw) {
       confidence: pick(item, ["confidence", "Confidence"]),
       email: pick(item, ["email", "Email"]),
       notes: pick(item, ["notes", "Notes"]),
+      batch: parseBatchNumber(pick(item, ["batch", "Batch"])),
       outreachSent,
       status: normalizeStatus(pick(item, ["status", "Status"]), outreachSent),
       createdAt: toISO(item.createdAt || item["Created ISO"] || item.Created) || ts,
@@ -655,16 +726,36 @@ function closeImportDialog() {
   if (backdrop) backdrop.hidden = true;
 }
 
+function stampedBatches(incoming) {
+  const max = incoming.reduce((m, p) => Math.max(m, Number(p.batch) || 0), 0);
+  if (max < 1) {
+    return {
+      prospects: incoming.map((p) => ({ ...p, batch: 1 })),
+      batchSeq: 1,
+    };
+  }
+  return {
+    prospects: incoming.map((p) => ({
+      ...p,
+      batch: Number(p.batch) > 0 ? Number(p.batch) : max,
+    })),
+    batchSeq: max,
+  };
+}
+
 function applyImported(incoming, mode) {
   if (mode === "replace") {
     selectedId = null;
     document.getElementById("backdrop").classList.remove("show");
     document.getElementById("drawer").classList.remove("show");
-    state.prospects = incoming;
+    const stamped = stampedBatches(incoming);
+    state.prospects = stamped.prospects;
+    state.batchSeq = stamped.batchSeq;
     saveState();
     toast(`Imported ${incoming.length} prospect${incoming.length === 1 ? "" : "s"}.`);
     return;
   }
+  const batch = nextBatchNumber(importBatchMode());
   const existing = new Set(state.prospects.map(prospectKey));
   let nextId = state.prospects.reduce((max, p) => Math.max(max, Number(p.id) || 0), 0);
   let added = 0;
@@ -672,16 +763,32 @@ function applyImported(incoming, mode) {
     const key = prospectKey(p);
     if (existing.has(key)) return;
     nextId += 1;
-    state.prospects.push({ ...p, id: nextId });
+    state.prospects.push({ ...p, id: nextId, batch });
     existing.add(key);
     added += 1;
   });
+  if (added) rememberBatch(batch);
   saveState();
   toast(
     added
-      ? `Added ${added} prospect${added === 1 ? "" : "s"}.`
+      ? `Added ${added} prospect${added === 1 ? "" : "s"} to ${batchLabel(batch)}.`
       : "Those prospects are already in the list.",
   );
+}
+
+function importBatchMode() {
+  const selected = document.querySelector('input[name="importBatchMode"]:checked');
+  return selected ? selected.value : "last";
+}
+
+function fillImportBatchChoices() {
+  const last = Math.max(lastBatchNumber(), 1);
+  document.getElementById("importBatchChoices").innerHTML = `
+    <label class="check"><input type="radio" name="importBatchMode" value="last" checked /> Add to ${batchLabel(last)}</label>
+    <label class="check"><input type="radio" name="importBatchMode" value="new" /> Start ${batchLabel(last + 1)}</label>
+  `;
+  document.getElementById("importBatchHint").textContent =
+    "Merge uses this for people who are not already here. Replace keeps the batches in the file, or starts Batch 1 if the file has none.";
 }
 
 function readFileBuffer(file) {
@@ -780,6 +887,7 @@ function importExcelBuffer(buffer) {
   const count = incoming.length;
   document.getElementById("importSummary").textContent =
     `This workbook has ${count} prospect${count === 1 ? "" : "s"}. You already have ${state.prospects.length}. Replace the current list, or merge and skip people who are already here.`;
+  fillImportBatchChoices();
   document.getElementById("importBackdrop").hidden = false;
 }
 
@@ -846,8 +954,35 @@ function openProspectForm(editId) {
     form.elements.status.value = "not_contacted";
   }
   updateUrlPreview();
+  syncBatchField(editId);
   document.getElementById("formBackdrop").hidden = false;
   form.elements.handle.focus();
+}
+
+function syncBatchField(editId) {
+  const choice = document.getElementById("batchChoiceWrap");
+  const readout = document.getElementById("batchReadout");
+  const choices = document.getElementById("batchChoices");
+  if (editId) {
+    choice.hidden = true;
+    choices.innerHTML = "";
+    const p = state.prospects.find((x) => x.id === editId);
+    readout.hidden = false;
+    document.getElementById("batchReadoutText").textContent = batchLabel(p && p.batch);
+    return;
+  }
+  readout.hidden = true;
+  const last = lastBatchNumber();
+  if (last < 1) {
+    choice.hidden = true;
+    choices.innerHTML = "";
+    return;
+  }
+  choice.hidden = false;
+  choices.innerHTML = `
+    <label class="check"><input type="radio" name="batchMode" value="last" checked /> Add to ${batchLabel(last)}</label>
+    <label class="check"><input type="radio" name="batchMode" value="new" /> Start ${batchLabel(last + 1)}</label>
+  `;
 }
 
 function closeProspectForm() {
@@ -955,10 +1090,16 @@ function submitProspectForm(e) {
     return;
   }
 
+  const selectedBatch = document.querySelector(
+    '#batchChoices input[name="batchMode"]:checked',
+  );
+  const batch = nextBatchNumber(selectedBatch ? selectedBatch.value : "new");
+  rememberBatch(batch);
   const nextId = Math.max(0, ...state.prospects.map((p) => p.id)) + 1;
   const p = {
     id: nextId,
     ...data,
+    batch,
     createdAt: ts,
     updatedAt: ts,
     statusUpdatedAt: ts,
@@ -966,7 +1107,7 @@ function submitProspectForm(e) {
       {
         id: uid(),
         type: "status",
-        content: "Prospect added.",
+        content: `Prospect added to ${batchLabel(batch)}.`,
         timestamp: ts,
       },
     ],
@@ -974,7 +1115,7 @@ function submitProspectForm(e) {
   state.prospects.push(p);
   saveState();
   closeProspectForm();
-  toast("Prospect added.");
+  toast(`Prospect added to ${batchLabel(batch)}.`);
   openDrawer(p.id);
 }
 
@@ -993,9 +1134,29 @@ function renderNicheFilter() {
   filters.niche = sel.value;
 }
 
+function renderBatchFilter() {
+  const sel = document.getElementById("batch");
+  const current = filters.batch;
+  const numbers = [
+    ...new Set(
+      state.prospects.map((p) => Number(p.batch)).filter((n) => n > 0),
+    ),
+  ].sort((a, b) => a - b);
+  sel.innerHTML =
+    `<option value="all">All batches</option>` +
+    numbers
+      .map((n) => `<option value="${n}">${batchLabel(n)}</option>`)
+      .join("");
+  const keep =
+    current === "all" || numbers.some((n) => String(n) === String(current));
+  sel.value = keep ? String(current) : "all";
+  filters.batch = sel.value;
+}
+
 function render() {
   renderStats();
   renderNicheFilter();
+  renderBatchFilter();
   renderTable();
   if (selectedId) renderDrawer();
 }
@@ -1017,8 +1178,8 @@ function bind() {
     filters.outreach = e.target.value;
     render();
   });
-  document.getElementById("confidence").addEventListener("change", (e) => {
-    filters.confidence = e.target.value;
+  document.getElementById("batch").addEventListener("change", (e) => {
+    filters.batch = e.target.value;
     render();
   });
   document.getElementById("exportBtn").onclick = exportExcel;

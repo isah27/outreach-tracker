@@ -14,11 +14,13 @@ A list saved by opening the file on disk is separate from a list saved on a host
 ## What you can do
 
 - See counts for prospects, reached out, not sent, in progress, positive, and negative.
-- Search by handle, name, angle, or email, and filter by niche, status, outreach, and confidence.
+- Search by handle, name, angle, or email, and filter by niche, status, outreach, and batch.
 - **Add prospect** opens the form. Handle, name, and niche are required. Niche suggestions are Wealth, Health, and Relationships, and you can type any niche.
 - Paste a username or an Instagram profile URL. The app stores the handle and builds the profile link.
 - Optional fields: email, specialty, followers, audience size, confidence, status, whether outreach was already sent, why they fit, offers or monetization, offer angle, and notes.
 - Click a row to open the side panel. From there you can edit or delete the prospect, change status, and log outreach, follow-ups, replies, and notes.
+- New prospects belong to a batch. The first person in an empty tracker starts **Batch 1**. After that, adding someone asks whether they join the latest batch or start the next one. Editing a prospect leaves their batch as it is.
+- People already saved in this browser are **Batch 1**. Deleting prospects does not reuse a batch number. **Reset data** starts over at Batch 1.
 - Saving an outreach message marks that prospect as sent. If they were Not contacted, the status moves to In progress.
 - Each save and status change is timestamped in the activity log. You can delete a log entry.
 
@@ -28,13 +30,13 @@ Statuses are Not contacted, In progress, Positive, and Negative.
 
 **Export Excel** downloads one workbook:
 
-- `Prospects` is the current list, including the latest outreach, follow-up, and reply.
+- `Prospects` is the current list, including each person’s batch and the latest outreach, follow-up, and reply.
 - `Activity` is the full log for each prospect.
 
 **Import Excel** reads that workbook back in.
 
-- An empty tracker imports the file immediately.
-- If this browser already has prospects, choose **Replace list**, **Merge**, or **Cancel**. Merge adds people who are not already here and skips matching handles.
+- An empty tracker imports the file immediately. A file with a Batch column keeps those batches. A file without one becomes **Batch 1**.
+- If this browser already has prospects, choose **Replace list**, **Merge**, or **Cancel**. Merge adds people who are not already here and skips matching handles. Merge also asks whether those new people join the latest batch or start the next one. Replace keeps the batches in the file, or starts **Batch 1** when the file has none.
 - **Reset data** clears this browser’s list after you confirm.
 
 ## Notes

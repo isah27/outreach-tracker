@@ -47,11 +47,8 @@
         <option value="sent">Sent</option>
         <option value="unsent">Not sent</option>
       </select>
-      <select id="confidence">
-        <option value="all">All confidence</option>
-        <option value="High">High</option>
-        <option value="Med">Med</option>
-        <option value="Low">Low</option>
+      <select id="batch">
+        <option value="all">All batches</option>
       </select>
       <span class="hint">Click a row to log messages and change status</span>
     </div>
@@ -64,7 +61,7 @@
             <th>Creator</th>
             <th>Niche</th>
             <th class="hide-sm">Size</th>
-            <th>Conf.</th>
+            <th>Batch</th>
             <th>Outreach</th>
             <th>Status</th>
             <th class="hide-sm">Updated</th>
@@ -88,6 +85,15 @@
         <input type="hidden" name="id" />
 
         <p class="form-hint">Fields marked <span class="req">*</span> are required. Everything else is optional.</p>
+
+        <div class="field-wrap" id="batchChoiceWrap" hidden>
+          <span class="choice-label">Batch</span>
+          <div class="choice-row" id="batchChoices"></div>
+        </div>
+        <div class="field-wrap" id="batchReadout" hidden>
+          <span class="choice-label">Batch</span>
+          <p class="batch-readout" id="batchReadoutText"></p>
+        </div>
 
         <div class="form-grid">
           <div class="field-wrap">
@@ -190,6 +196,11 @@
       </div>
       <div class="modal-body">
         <p class="form-hint" id="importSummary"></p>
+        <div class="field-wrap" id="importBatchWrap">
+          <span class="choice-label">Where should new people go?</span>
+          <div class="choice-row" id="importBatchChoices"></div>
+          <p class="form-hint" id="importBatchHint"></p>
+        </div>
         <div class="modal-actions">
           <button type="button" class="ghost" id="importDismissBtn">Cancel</button>
           <button type="button" id="importMergeBtn">Merge</button>

@@ -420,6 +420,21 @@ label.check {
   color: var(--text);
   font-size: 13px;
 }
+.choice-label {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.choice-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.batch-readout {
+  margin: 0;
+  font-size: 13px;
+}
 .modal-actions {
   display: flex;
   justify-content: flex-end;
