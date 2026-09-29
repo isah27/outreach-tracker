@@ -139,6 +139,7 @@ let filters = {
   niche: "all",
   status: "all",
   outreach: "all",
+  response: "all",
   batch: "all",
 };
 
@@ -236,6 +237,12 @@ function filtered() {
     if (filters.status !== "all" && p.status !== filters.status) return false;
     if (filters.outreach === "sent" && !p.outreachSent) return false;
     if (filters.outreach === "unsent" && p.outreachSent) return false;
+    const hasResponse = (p.activity || []).some(
+      (activity) =>
+        normalizeType(activity.type || activity.Type) === "response",
+    );
+    if (filters.response === "responded" && !hasResponse) return false;
+    if (filters.response === "not_responded" && hasResponse) return false;
     if (filters.batch !== "all" && String(p.batch) !== String(filters.batch))
       return false;
     if (!q) return true;
@@ -612,7 +619,8 @@ function pick(item, keys) {
 
 function toISO(value) {
   if (value == null || value === "") return "";
-  if (value instanceof Date && !isNaN(value.getTime())) return value.toISOString();
+  if (value instanceof Date && !isNaN(value.getTime()))
+    return value.toISOString();
   if (typeof value === "number" && value > 20000 && value < 80000) {
     const utc = new Date(Math.round((value - 25569) * 86400 * 1000));
     if (!isNaN(utc.getTime())) return utc.toISOString();
@@ -625,12 +633,16 @@ function toISO(value) {
 function asBool(value) {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value !== 0;
-  const text = String(value ?? "").trim().toLowerCase();
+  const text = String(value ?? "")
+    .trim()
+    .toLowerCase();
   return text === "yes" || text === "true" || text === "1" || text === "sent";
 }
 
 function normalizeStatus(value, outreachSent) {
-  const key = String(value || "").trim().toLowerCase();
+  const key = String(value || "")
+    .trim()
+    .toLowerCase();
   if (STATUS_FROM_LABEL[key]) return STATUS_FROM_LABEL[key];
   return outreachSent ? "in_progress" : "not_contacted";
 }
@@ -641,7 +653,8 @@ function importedList(raw) {
   if (Array.isArray(raw.prospects)) return raw.prospects;
   if (Array.isArray(raw.data)) return raw.data;
   if (Array.isArray(raw.items)) return raw.items;
-  if (raw.handle || raw.Handle || raw.name || raw.Name || raw.username) return [raw];
+  if (raw.handle || raw.Handle || raw.name || raw.Name || raw.username)
+    return [raw];
   return [];
 }
 
@@ -650,10 +663,14 @@ function normalizeActivity(list) {
   return list
     .filter((item) => item && typeof item === "object")
     .map((item) => ({
-      id: item.id || item["Activity id"] ? String(item.id || item["Activity id"]) : uid(),
+      id:
+        item.id || item["Activity id"]
+          ? String(item.id || item["Activity id"])
+          : uid(),
       type: normalizeType(item.type || item.Type),
       content: String(item.content || item.Content || ""),
-      timestamp: toISO(item.timestamp || item["ISO time"] || item.Timestamp) || nowISO(),
+      timestamp:
+        toISO(item.timestamp || item["ISO time"] || item.Timestamp) || nowISO(),
     }));
 }
 
@@ -669,14 +686,24 @@ function normalizeImported(raw) {
     const link = pick(item, ["Instagram", "instagram", "url", "profile"]);
     const handle = parseHandle(
       directHandle ||
-        (/instagram\.com/i.test(link) || /^@?[A-Za-z0-9._]+$/.test(link) ? link : ""),
+        (/instagram\.com/i.test(link) || /^@?[A-Za-z0-9._]+$/.test(link)
+          ? link
+          : ""),
     );
     const name = pick(item, ["name", "Name"]);
     if (!handle && !name) return;
     const outreachSent = asBool(
-      item.outreachSent ?? item.outreach_sent ?? item["Outreach sent"] ?? item.outreach,
+      item.outreachSent ??
+        item.outreach_sent ??
+        item["Outreach sent"] ??
+        item.outreach,
     );
-    const explicitUrl = pick(item, ["url", "Instagram", "instagram", "profile"]);
+    const explicitUrl = pick(item, [
+      "url",
+      "Instagram",
+      "instagram",
+      "profile",
+    ]);
     const url = /^https?:\/\//i.test(explicitUrl)
       ? explicitUrl
       : profileUrlFromHandle(handle);
@@ -697,7 +724,11 @@ function normalizeImported(raw) {
       size: pick(item, ["size", "Size"]),
       url,
       whyFits: pick(item, ["whyFits", "why_fits", "Why they fit"]),
-      noPaidOffer: pick(item, ["noPaidOffer", "Offers / monetization", "monetization"]),
+      noPaidOffer: pick(item, [
+        "noPaidOffer",
+        "Offers / monetization",
+        "monetization",
+      ]),
       mosAngle: pick(item, ["mosAngle", "angle", "Offer angle"]),
       confidence: pick(item, ["confidence", "Confidence"]),
       email: pick(item, ["email", "Email"]),
@@ -705,10 +736,16 @@ function normalizeImported(raw) {
       batch: parseBatchNumber(pick(item, ["batch", "Batch"])),
       outreachSent,
       status: normalizeStatus(pick(item, ["status", "Status"]), outreachSent),
-      createdAt: toISO(item.createdAt || item["Created ISO"] || item.Created) || ts,
-      updatedAt: toISO(item.updatedAt || item["Updated ISO"] || item.Updated) || ts,
+      createdAt:
+        toISO(item.createdAt || item["Created ISO"] || item.Created) || ts,
+      updatedAt:
+        toISO(item.updatedAt || item["Updated ISO"] || item.Updated) || ts,
       statusUpdatedAt:
-        toISO(item.statusUpdatedAt || item["Status updated ISO"] || item["Status updated"]) || ts,
+        toISO(
+          item.statusUpdatedAt ||
+            item["Status updated ISO"] ||
+            item["Status updated"],
+        ) || ts,
       activity: normalizeActivity(item.activity),
     });
   });
@@ -752,12 +789,17 @@ function applyImported(incoming, mode) {
     state.prospects = stamped.prospects;
     state.batchSeq = stamped.batchSeq;
     saveState();
-    toast(`Imported ${incoming.length} prospect${incoming.length === 1 ? "" : "s"}.`);
+    toast(
+      `Imported ${incoming.length} prospect${incoming.length === 1 ? "" : "s"}.`,
+    );
     return;
   }
   const batch = nextBatchNumber(importBatchMode());
   const existing = new Set(state.prospects.map(prospectKey));
-  let nextId = state.prospects.reduce((max, p) => Math.max(max, Number(p.id) || 0), 0);
+  let nextId = state.prospects.reduce(
+    (max, p) => Math.max(max, Number(p.id) || 0),
+    0,
+  );
   let added = 0;
   incoming.forEach((p) => {
     const key = prospectKey(p);
@@ -777,7 +819,9 @@ function applyImported(incoming, mode) {
 }
 
 function importBatchMode() {
-  const selected = document.querySelector('input[name="importBatchMode"]:checked');
+  const selected = document.querySelector(
+    'input[name="importBatchMode"]:checked',
+  );
   return selected ? selected.value : "last";
 }
 
@@ -802,7 +846,9 @@ function readFileBuffer(file) {
 }
 
 function sheetByName(wb, name) {
-  const found = (wb.SheetNames || []).find((n) => String(n).toLowerCase() === name.toLowerCase());
+  const found = (wb.SheetNames || []).find(
+    (n) => String(n).toLowerCase() === name.toLowerCase(),
+  );
   return found ? wb.Sheets[found] : null;
 }
 
@@ -816,7 +862,9 @@ function uniqueActivity(lists) {
   const out = [];
   lists.flat().forEach((item) => {
     if (!item) return;
-    const key = [item.id, item.type, item.timestamp, item.content].join("\u0000");
+    const key = [item.id, item.type, item.timestamp, item.content].join(
+      "\u0000",
+    );
     if (seen.has(key)) return;
     seen.add(key);
     out.push(item);
@@ -826,11 +874,14 @@ function uniqueActivity(lists) {
 
 function workbookToProspects(wb) {
   const prospectSheet =
-    sheetByName(wb, "Prospects") || (wb.SheetNames[0] && wb.Sheets[wb.SheetNames[0]]);
+    sheetByName(wb, "Prospects") ||
+    (wb.SheetNames[0] && wb.Sheets[wb.SheetNames[0]]);
   const rows = sheetRows(prospectSheet);
   const grouped = new Map();
   sheetRows(sheetByName(wb, "Activity")).forEach((row) => {
-    const idKey = String(row["#"] ?? "").replace(/^#/, "").trim();
+    const idKey = String(row["#"] ?? "")
+      .replace(/^#/, "")
+      .trim();
     const handleKey = parseHandle(row.Handle || row.handle || "").toLowerCase();
     const entry = {
       id: row["Activity id"] || "",
@@ -846,7 +897,9 @@ function workbookToProspects(wb) {
       });
   });
   rows.forEach((row) => {
-    const idKey = String(row["#"] ?? row.id ?? "").replace(/^#/, "").trim();
+    const idKey = String(row["#"] ?? row.id ?? "")
+      .replace(/^#/, "")
+      .trim();
     const handleKey = parseHandle(row.Handle || row.handle || "").toLowerCase();
     row.activity = uniqueActivity([
       idKey ? grouped.get(`id:${idKey}`) : [],
@@ -855,7 +908,10 @@ function workbookToProspects(wb) {
     row.createdAt = row["Created ISO"] || row.createdAt || row.Created || "";
     row.updatedAt = row["Updated ISO"] || row.updatedAt || row.Updated || "";
     row.statusUpdatedAt =
-      row["Status updated ISO"] || row.statusUpdatedAt || row["Status updated"] || "";
+      row["Status updated ISO"] ||
+      row.statusUpdatedAt ||
+      row["Status updated"] ||
+      "";
   });
   return normalizeImported(rows);
 }
@@ -968,7 +1024,9 @@ function syncBatchField(editId) {
     choices.innerHTML = "";
     const p = state.prospects.find((x) => x.id === editId);
     readout.hidden = false;
-    document.getElementById("batchReadoutText").textContent = batchLabel(p && p.batch);
+    document.getElementById("batchReadoutText").textContent = batchLabel(
+      p && p.batch,
+    );
     return;
   }
   readout.hidden = true;
@@ -1178,27 +1236,33 @@ function bind() {
     filters.outreach = e.target.value;
     render();
   });
+  document.getElementById("responseFilter").addEventListener("change", (e) => {
+    filters.response = e.target.value;
+    render();
+  });
   document.getElementById("batch").addEventListener("change", (e) => {
     filters.batch = e.target.value;
     render();
   });
   document.getElementById("exportBtn").onclick = exportExcel;
   document.getElementById("resetBtn").onclick = resetData;
-  document.getElementById("importFile").addEventListener("change", async (e) => {
-    const input = e.target;
-    const file = input.files && input.files[0];
-    if (!file) return;
-    let buffer;
-    try {
-      buffer = await readFileBuffer(file);
-    } catch {
+  document
+    .getElementById("importFile")
+    .addEventListener("change", async (e) => {
+      const input = e.target;
+      const file = input.files && input.files[0];
+      if (!file) return;
+      let buffer;
+      try {
+        buffer = await readFileBuffer(file);
+      } catch {
+        input.value = "";
+        toast("Could not read that file.");
+        return;
+      }
       input.value = "";
-      toast("Could not read that file.");
-      return;
-    }
-    input.value = "";
-    importExcelBuffer(buffer);
-  });
+      importExcelBuffer(buffer);
+    });
   document.getElementById("importReplaceBtn").onclick = () => {
     const incoming = pendingImport;
     closeImportDialog();

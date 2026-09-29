@@ -15,7 +15,7 @@ A list saved by opening the file on disk is separate from a list saved on a host
 
 - See a quick home summary for prospects, reached out, not sent, in progress, positive, and negative.
 - Open **Analytics** for those counts across all batches or one batch, plus prospects with a logged reply, response rate, and monthly outreach, follow-up, and response activity. Responded counts each prospect once when at least one reply is logged. The response rate is the share of reached-out prospects with a logged reply. Activity totals use saved log entries and dates; they do not infer historical activity from current status or outreach fields.
-- Search by handle, name, angle, or email, and filter by niche, status, outreach, and batch.
+- Search by handle, name, angle, or email, and filter by niche, status, outreach, reply status, and batch.
 - **Add prospect** opens the form. Handle, name, and niche are required. Niche suggestions are Wealth, Health, and Relationships, and you can type any niche.
 - Paste a username or an Instagram profile URL. The app stores the handle and builds the profile link.
 - Optional fields: email, specialty, followers, audience size, confidence, status, whether outreach was already sent, why they fit, offers or monetization, offer angle, and notes.
